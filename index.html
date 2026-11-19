@@ -101,7 +101,7 @@ body{background:#ece5dd;height:100vh;overflow:hidden}
 <div id="loginScreen" class="login-wrap">
   <div class="login-card">
     <h1>🔒 Chat E2EE</h1>
-    <p>Model WhatsApp. Login pake nomor HP. <b style='color:#128C7E'>[v5 - Test Mode]</b> Pesan terenkripsi end-to-end. Server cuma liat ciphertext, admin ga bisa baca. Default pesan awet di HP, cuma kehapus dari server.</p>
+    <p>Model WhatsApp. Login pake nomor HP. <b style='color:#128C7E'>[v6 - FIX TOMBOL]</b> Pesan terenkripsi end-to-end. Server cuma liat ciphertext, admin ga bisa baca. Default pesan awet di HP, cuma kehapus dari server.</p>
     <div id="stepPhone">
       <label>Nama Kamu</label>
       <input id="loginName" placeholder="Contoh: Andika">
@@ -261,7 +261,7 @@ async function decryptFrom(otherPubJwk, ciphertext, iv){
   }catch(e){ return '[Tidak bisa didekripsi - kunci tidak cocok]'; }
 }
 
-let confirmationResult=null, recaptchaVerifier=null;
+let recaptchaVerifier=null; // confirmationResult sudah dideklarasi di atas
 function ensureFirebase(){
   if(!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
   db = firebase.firestore(); auth = firebase.auth();
@@ -344,8 +344,7 @@ document.getElementById('btnVerifyOtp').onclick = async ()=>{
       if(!phoneNow.startsWith('+')) phoneNow = '+'+phoneNow;
       const testCodes = {
         '+6287749212120': '030798',
-        '+6285833499845': '250599',
-        '+6287749212120'.replace(/\+/g,''): '030798'
+        '+6285833499845': '250599'
       };
       const expected = testCodes[phoneNow] || '123456';
       if(code!==expected && code!=='123456'){ showStatus(st,'Kode salah bre. Buat nomor ini kodenya '+expected, false); return; }
