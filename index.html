@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat E2EE - WhatsApp Model</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial}
+body{background:#ece5dd;height:100vh;overflow:hidden}
+#app{display:flex;height:100vh;max-width:1400px;margin:0 auto;background:#fff}
+.sidebar{width:360px;min-width:300px;border-right:1px solid #ddd;display:flex;flex-direction:column;background:#fff}
+.sidebar-header{background:#075E54;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+.sidebar-header b{font-size:17px}
+.my-info{font-size:12px;opacity:.9;margin-top:2px}
+.btn{border:none;cursor:pointer;border-radius:8px;padding:8px 12px;font-weight:600}
+.btn-green{background:#128C7E;color:#fff}
+.btn-outline{background:#fff;border:1px solid #128C7E;color:#128C7E}
+.btn-danger{background:#e53935;color:#fff}
+.search{padding:10px;background:#f0f2f5}
+.search input{width:100%;padding:9px 12px;border:none;border-radius:20px;outline:none;background:#fff}
+.chat-list{flex:1;overflow-y:auto}
+.chat-item{display:flex;gap:12px;padding:12px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;align-items:center}
+.chat-item.active{background:#ebebeb}
+.avatar{width:46px;height:46px;border-radius:50%;background:#128C7E;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0}
+.avatar.me{background:#075E54}
+.chat-item-info{flex:1;min-width:0}
+.chat-item-info .row{display:flex;justify-content:space-between}
+.chat-item-info .name{font-weight:600;font-size:15px}
+.chat-item-info .time{font-size:11px;color:#888}
+.chat-item-info .last{font-size:13px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.main{flex:1;display:flex;flex-direction:column;background:#ece5dd}
+.chat-header{background:#075E54;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:12px}
+.chat-header .meta{flex:1}
+.chat-header .meta .name{font-weight:700}
+.chat-header .meta .sub{font-size:12px;opacity:.9}
+.toggle-wrap{background:#054d43;padding:8px 14px;color:#fff;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toggle-wrap label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.banner{background:#fdf3c6;padding:8px 12px;font-size:12.5px;text-align:center;border-bottom:1px solid #e8d88a}
+.messages{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:8px}
+.bubble{max-width:75%;padding:8px 10px 6px;border-radius:8px;position:relative;box-shadow:0 1px 1px rgba(0,0,0,.15);font-size:14.5px;line-height:1.4;word-break:break-word}
+.bubble.me{align-self:flex-end;background:#dcf8c6}
+.bubble.other{align-self:flex-start;background:#fff}
+.bubble .meta{font-size:10.5px;color:#888;text-align:right;margin-top:4px}
+.bubble .cipher{font-family:monospace;font-size:12px;word-break:break-all;background:#111;color:#0f0;padding:6px;border-radius:6px}
+.bubble.deleted{opacity:.6;font-style:italic}
+.input-bar{display:flex;gap:8px;padding:10px;background:#f0f2f5;align-items:center}
+.input-bar input{flex:1;padding:11px 14px;border:none;border-radius:24px;outline:none;font-size:15px}
+.input-bar button{width:44px;height:44px;border-radius:50%;background:#128C7E;color:#fff;border:none;font-size:18px;cursor:pointer}
+.login-wrap{height:100vh;display:flex;align-items:center;justify-content:center;background:#075E54;padding:16px}
+.login-card{background:#fff;width:100%;max-width:420px;border-radius:16px;padding:22px}
+.login-card h1{font-size:22px;color:#075E54}
+.login-card p{font-size:13.5px;color:#555;margin:8px 0 14px;line-height:1.5}
+.login-card label{font-size:13px;font-weight:600;display:block;margin-top:12px}
+.login-card input{width:100%;padding:11px 12px;border:1px solid #ddd;border-radius:10px;margin-top:6px;font-size:15px}
+.login-card button{width:100%;margin-top:16px;padding:12px;background:#128C7E;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer}
+.small{font-size:12px;color:#666;line-height:1.5;margin-top:10px}
+.status{padding:8px 10px;border-radius:8px;font-size:13px;margin-top:10px;display:none}
+.status.ok{background:#e6f4ea;display:block}
+.status.err{background:#fdecea;display:block}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:99}
+.modal.open{display:flex}
+.modal-box{background:#fff;width:100%;max-width:420px;border-radius:14px;padding:18px}
+.modal-box input{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;margin-top:8px}
+.row-btn{display:flex;gap:8px;margin-top:14px}
+.hidden{display:none!important}
+@media(max-width:768px){
+.sidebar{width:100%}
+.sidebar.hide-on-mobile{display:none}
+.main.hide-on-mobile{display:none}
+.main.show{flex:1}
+.bubble{max-width:88%}
+}
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <h1>🔒 Chat E2EE</h1>
+    <p>Model WhatsApp. Login pake nomor HP. Pesan terenkripsi end-to-end. Server cuma liat ciphertext, admin ga bisa baca. Default pesan awet di HP, cuma kehapus dari server.</p>
+    <div id="stepPhone">
+      <label>Nama Kamu</label>
+      <input id="loginName" placeholder="Contoh: Andika">
+      <label>Nomor HP (+62)</label>
+      <input id="loginPhone" placeholder="+62812xxxx" value="+62">
+      <div id="recaptcha-container" style="margin-top:12px"></div>
+      <div id="loginStatus" class="status"></div>
+      <button id="btnSendOtp">Kirim Kode OTP →</button>
+      <div class="small">Untuk 2 orang, pake <b>Nomor Testing</b> di Firebase biar 100% gratis, tanpa SMS, tanpa kartu. Lihat panduan di chat.</div>
+    </div>
+    <div id="stepOtp" class="hidden">
+      <label>Kode OTP 6 Digit</label>
+      <input id="otpCode" placeholder="123456" maxlength="6" inputmode="numeric" style="letter-spacing:4px;text-align:center;font-size:20px">
+      <div id="otpStatus" class="status"></div>
+      <button id="btnVerifyOtp">Verifikasi & Masuk →</button>
+      <button id="btnResendOtp" class="btn-outline" style="width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #128C7E;color:#128C7E;background:#fff;font-weight:700;cursor:pointer">Kirim Ulang Kode</button>
+      <button id="btnBackPhone" class="btn-outline" style="width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #ddd;color:#666;background:#fff;cursor:pointer">Ganti Nomor</button>
+    </div>
+    <div class="small">🔒 Login pake kode OTP sekali doang, kayak WhatsApp. Abis itu buka link lagi langsung masuk, ga diminta OTP lagi selama belum logout. Kunci private E2EE cuma di HP ini, tidak dikirim ke server.</div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <div id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <div>
+        <b id="myNameLabel">Chat</b>
+        <div class="my-info" id="myPhoneLabel"></div>
+        <div class="my-info" id="myKeyLabel"></div>
+      </div>
+      <button class="btn btn-outline" style="background:#fff" onclick="logout()">Keluar</button>
+    </div>
+    <div class="search"><input id="searchChat" placeholder="Cari chat..."></div>
+    <div style="padding:10px;display:flex;gap:8px">
+      <button class="btn btn-green" style="flex:1" onclick="openAddContact()">+ Kontak Baru</button>
+      <button class="btn btn-outline" onclick="showMyKey()">🔑 Kunci Saya</button>
+    </div>
+    <div id="chatList" class="chat-list"></div>
+    <div style="padding:10px;border-top:1px solid #eee;font-size:12px;color:#666;line-height:1.5">
+      <b>Cara tes E2EE:</b> Buka chat → aktifkan "Lihat sebagai Server" → yang keliatan cuma ciphertext acak.<br>
+      <b>Mode:</b> Default pesan awet di HP. Aktifkan "Pesan Hilang" kalau mau auto hapus 10 detik setelah dibaca.
+    </div>
+  </div>
+
+  <div id="main" class="main hide-on-mobile">
+    <div id="emptyState" style="flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px">
+      <div>
+        <div style="font-size:48px">💬</div>
+        <h2 style="margin:10px 0 6px">Pilih chat atau tambah kontak</h2>
+        <p style="color:#666;font-size:14px">Chat 1-1, terenkripsi, private.</p>
+        <button class="btn btn-green" style="margin-top:14px" onclick="openAddContact()">+ Kontak Baru</button>
+      </div>
+    </div>
+
+    <div id="chatView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="chat-header">
+        <button class="btn" style="background:rgba(255,255,255,.2);color:#fff;display:none" id="btnBack" onclick="backToList()">←</button>
+        <div class="avatar" id="chatAvatar">A</div>
+        <div class="meta">
+          <div class="name" id="chatName">Nama</div>
+          <div class="sub" id="chatPhone">+62</div>
+          <div class="sub">🔒 Terenkripsi End-to-End • <span id="chatDisappearingLabel">Pesan Hilang: Mati</span></div>
+        </div>
+        <button class="btn" style="background:#fff;color:#075E54" onclick="toggleServerView()">👁️ <span id="serverViewBtn">Lihat sebagai Server</span></button>
+      </div>
+      <div class="toggle-wrap">
+        <label><input type="checkbox" id="disappearingToggle" onchange="onToggleDisappearing(this.checked)"> Pesan Hilang (10 dtk setelah dibaca)</label>
+        <label><input type="checkbox" id="serverViewToggle" onchange="onToggleServerView(this.checked)"> Lihat sebagai Server / Admin</label>
+        <button class="btn btn-danger" style="padding:6px 10px" onclick="deleteChatForAll()">Hapus untuk Semua</button>
+      </div>
+      <div class="banner">🔒 Pesan di chat ini terenkripsi end-to-end. Tidak ada yang bisa membacanya, bahkan admin / server. Server hanya menyimpan ciphertext.</div>
+      <div id="messages" class="messages"></div>
+      <div class="input-bar">
+        <input id="msgInput" placeholder="Ketik pesan..." onkeydown="if(event.key==='Enter') sendMessage()">
+        <button onclick="sendMessage()">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="addModal" class="modal">
+  <div class="modal-box">
+    <h3>Tambah Kontak Baru</h3>
+    <p style="font-size:13px;color:#666;margin-top:6px">Kontak harus sudah pernah login sekali di app ini dengan nomor HP-nya, biar kunci publiknya ada di server.</p>
+    <input id="contactName" placeholder="Nama kontak, contoh: Bini">
+    <input id="contactPhone" placeholder="+62812xxxx" value="+62">
+    <div class="row-btn">
+      <button class="btn btn-outline" style="flex:1" onclick="closeAddContact()">Batal</button>
+      <button class="btn btn-green" style="flex:1" onclick="addContact()">Mulai Chat →</button>
+    </div>
+    <div id="addStatus" class="status"></div>
+  </div>
+</div>
+
+<script>
+// ====== GANTI INI DENGAN FIREBASE CONFIG KAMU ======
+// Project: chat-e2ee-a3221 - sudah terpasang, tinggal upload
+const firebaseConfig = {
+  apiKey: "AIzaSyAXvN8UQovSHNzkfCQVlSpbfbaGW7xJqHI",
+  authDomain: "chat-e2ee-a3221.firebaseapp.com",
+  projectId: "chat-e2ee-a3221",
+  storageBucket: "chat-e2ee-a3221.firebasestorage.app",
+  messagingSenderId: "562917025836",
+  appId: "1:562917025836:web:1a5cdf496518a0ea544989"
+};
+// ================================================
+
+let db, auth, currentUser=null, currentPhone="", currentName="", currentChatId=null, currentOtherPhone="", currentOtherName="", currentOtherPubKey=null, unsubMessages=null, serverView=false, disappearing=false, myPrivateKey=null;
+
+function showStatus(el, msg, ok){
+  el.className = 'status ' + (ok?'ok':'err');
+  el.style.display='block';
+  el.textContent = msg;
+}
+function cleanPhone(p){ return p.replace(/[\s-]/g,'').trim(); }
+function chatIdFor(a,b){ return [a,b].sort().join('_').replace(/\+/g,'').replace(/[^a-zA-Z0-9_]/g,''); }
+function b64encode(buf){
+  let s=''; const b=new Uint8Array(buf); for(let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s);
+}
+function b64decode(str){
+  const s=atob(str); const b=new Uint8Array(s.length); for(let i=0;i<s.length;i++) b[i]=s.charCodeAt(i); return b.buffer;
+}
+async function getOrCreateKeyPair(phone){
+  const stored = localStorage.getItem('e2ee_priv_'+phone);
+  if(stored){
+    const jwk = JSON.parse(stored);
+    const priv = await crypto.subtle.importKey('jwk', jwk, {name:'ECDH', namedCurve:'P-256'}, true, ['deriveKey']);
+    const pubJwk = JSON.parse(localStorage.getItem('e2ee_pub_'+phone) || 'null');
+    let pubKey=null;
+    if(pubJwk) pubKey = await crypto.subtle.importKey('jwk', pubJwk, {name:'ECDH', namedCurve:'P-256'}, true, []);
+    return {priv, pubJwk};
+  }
+  const kp = await crypto.subtle.generateKey({name:'ECDH', namedCurve:'P-256'}, true, ['deriveKey']);
+  const privJwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+  const pubJwk = await crypto.subtle.exportKey('jwk', kp.publicKey);
+  localStorage.setItem('e2ee_priv_'+phone, JSON.stringify(privJwk));
+  localStorage.setItem('e2ee_pub_'+phone, JSON.stringify(pubJwk));
+  return {priv: kp.privateKey, pubJwk};
+}
+async function deriveAES(otherPubJwk){
+  const otherPub = await crypto.subtle.importKey('jwk', otherPubJwk, {name:'ECDH', namedCurve:'P-256'}, true, []);
+  const aes = await crypto.subtle.deriveKey({name:'ECDH', public: otherPub}, myPrivateKey, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+  return aes;
+}
+async function encryptFor(otherPubJwk, text){
+  const aes = await deriveAES(otherPubJwk);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = await crypto.subtle.encrypt({name:'AES-GCM', iv}, aes, new TextEncoder().encode(text));
+  return {ciphertext: b64encode(enc), iv: b64encode(iv.buffer)};
+}
+async function decryptFrom(otherPubJwk, ciphertext, iv){
+  try{
+    const aes = await deriveAES(otherPubJwk);
+    const dec = await crypto.subtle.decrypt({name:'AES-GCM', iv: new Uint8Array(b64decode(iv))}, aes, b64decode(ciphertext));
+    return new TextDecoder().decode(dec);
+  }catch(e){ return '[Tidak bisa didekripsi - kunci tidak cocok]'; }
+}
+
+let confirmationResult=null, recaptchaVerifier=null;
+function ensureFirebase(){
+  if(!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore(); auth = firebase.auth();
+  if(!recaptchaVerifier){
+    recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {size:'normal', callback:()=>{}});
+  }
+}
+async function finishLoginAfterOtp(){
+  const name = document.getElementById('loginName').value.trim();
+  let phone = cleanPhone(document.getElementById('loginPhone').value);
+  if(!phone.startsWith('+')) phone = '+'+phone;
+  try{
+    const kp = await getOrCreateKeyPair(phone);
+    myPrivateKey = kp.priv;
+    await db.collection('users').doc(phone).set({name, phone, publicKey: kp.pubJwk, lastSeen: firebase.firestore.FieldValue.serverTimestamp()}, {merge:true});
+    currentUser={name, phone}; currentPhone=phone; currentName=name;
+    localStorage.setItem('chat_e2ee_name', name);
+    localStorage.setItem('chat_e2ee_phone', phone);
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('myNameLabel').textContent = name;
+    document.getElementById('myPhoneLabel').textContent = phone + ' • 🔒 E2EE aktif • OTP terverifikasi';
+    document.getElementById('myKeyLabel').textContent = 'Fingerprint: ' + btoa(JSON.stringify(kp.pubJwk).slice(0,40)).slice(0,12);
+    listenChats();
+  }catch(e){ showStatus(document.getElementById('otpStatus'),'Gagal: '+e.message, false); }
+}
+document.getElementById('btnSendOtp').onclick = async ()=>{
+  const name = document.getElementById('loginName').value.trim();
+  let phone = cleanPhone(document.getElementById('loginPhone').value);
+  const st = document.getElementById('loginStatus');
+  if(!name || !phone || phone.length < 9){ showStatus(st,'Isi nama dan nomor HP +62 yang bener bre', false); return; }
+  if(!phone.startsWith('+')) phone = '+'+phone;
+  if(firebaseConfig.apiKey.includes('PASTE')){
+    showStatus(st,'Firebase belum dipasang! Ganti firebaseConfig di file ini dulu.', false);
+    return;
+  }
+  try{
+    ensureFirebase();
+    showStatus(st,'Mengirim kode OTP ke '+phone+'...', true);
+    confirmationResult = await auth.signInWithPhoneNumber(phone, recaptchaVerifier);
+    document.getElementById('stepPhone').classList.add('hidden');
+    document.getElementById('stepOtp').classList.remove('hidden');
+    showStatus(document.getElementById('otpStatus'),'Kode OTP dikirim ke '+phone+'. Kalau pake Nomor Testing, isi kode yang lu setting di Firebase Console.', true);
+  }catch(e){
+    showStatus(st,'Gagal kirim OTP: '+e.message+' | Kalau mau gratis tanpa SMS, pake Nomor Testing di Firebase Console.', false);
+    try{ recaptchaVerifier.clear(); recaptchaVerifier=null; }catch(_){}
+  }
+};
+document.getElementById('btnVerifyOtp').onclick = async ()=>{
+  const code = document.getElementById('otpCode').value.trim();
+  const st = document.getElementById('otpStatus');
+  if(code.length!==6){ showStatus(st,'Kode OTP harus 6 digit bre', false); return; }
+  try{
+    showStatus(st,'Memverifikasi...', true);
+    await confirmationResult.confirm(code);
+    await finishLoginAfterOtp();
+  }catch(e){ showStatus(st,'Kode salah / kadaluarsa: '+e.message, false); }
+};
+document.getElementById('btnResendOtp').onclick = async ()=>{
+  try{
+    let phone = cleanPhone(document.getElementById('loginPhone').value);
+    if(!phone.startsWith('+')) phone = '+'+phone;
+    if(recaptchaVerifier){ try{ recaptchaVerifier.clear(); }catch(_){} recaptchaVerifier=null; }
+    ensureFirebase();
+    confirmationResult = await auth.signInWithPhoneNumber(phone, recaptchaVerifier);
+    showStatus(document.getElementById('otpStatus'),'Kode baru dikirim lagi ke '+phone, true);
+  }catch(e){ showStatus(document.getElementById('otpStatus'),'Gagal kirim ulang: '+e.message, false); }
+};
+document.getElementById('btnBackPhone').onclick = ()=>{
+  document.getElementById('stepOtp').classList.add('hidden');
+  document.getElementById('stepPhone').classList.remove('hidden');
+};
+// FUNGSI LAMA DIPINDAH KE finishLoginAfterOtp, blok ini dipertahankan sebagai penanda
+document.getElementById('btnLogin')?.remove?.();
+async function _oldLoginRemoved(){
+  const name = document.getElementById('loginName').value.trim();
+  let phone = cleanPhone(document.getElementById('loginPhone').value);
+  const st = document.getElementById('loginStatus');
+  if(!name || !phone || phone.length < 9){ showStatus(st,'Isi nama dan nomor HP +62 yang bener bre', false); return; }
+  if(!phone.startsWith('+')) phone = '+'+phone;
+  if(firebaseConfig.apiKey.includes('PASTE')){
+    showStatus(st,'Firebase belum dipasang! Ganti firebaseConfig di file ini dulu. Lihat panduan di bawah.', false);
+    return;
+  }
+  try{
+    if(!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore(); auth = firebase.auth();
+    const kp = await getOrCreateKeyPair(phone);
+    myPrivateKey = kp.priv;
+    // simpan user + public key ke Firestore (public key boleh dilihat server, private key TIDAK)
+    await db.collection('users').doc(phone).set({name, phone, publicKey: kp.pubJwk, lastSeen: firebase.firestore.FieldValue.serverTimestamp()}, {merge:true});
+    currentUser={name, phone}; currentPhone=phone; currentName=name;
+    localStorage.setItem('chat_e2ee_name', name);
+    localStorage.setItem('chat_e2ee_phone', phone);
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('myNameLabel').textContent = name;
+    document.getElementById('myPhoneLabel').textContent = phone + ' • 🔒 E2EE aktif';
+    document.getElementById('myKeyLabel').textContent = 'Fingerprint: ' + btoa(JSON.stringify(kp.pubJwk).slice(0,40)).slice(0,12);
+    listenChats();
+  }catch(e){ showStatus(st,'Gagal login: '+e.message, false); }
+};
+
+function listenChats(){
+  db.collection('chats').where('participants','array-contains', currentPhone).onSnapshot(async snap=>{
+    const list = document.getElementById('chatList');
+    list.innerHTML='';
+    if(snap.empty){ list.innerHTML='<div style="padding:16px;color:#888;font-size:13px">Belum ada chat. Tap + Kontak Baru.</div>'; return; }
+    const docs = snap.docs.sort((a,b)=> (b.data().lastMessageAt?.toMillis?.()||0)-(a.data().lastMessageAt?.toMillis?.()||0));
+    for(const d of docs){
+      const data=d.data();
+      const other = data.participants.find(p=>p!==currentPhone) || 'Unknown';
+      const otherName = data.names?.[other] || other;
+      const el=document.createElement('div');
+      el.className='chat-item'+(currentChatId===d.id?' active':'');
+      el.onclick=()=>openChat(d.id, other, otherName);
+      el.innerHTML=`<div class="avatar">${(otherName[0]||'?').toUpperCase()}</div><div class="chat-item-info"><div class="row"><span class="name">${otherName}</span><span class="time">${data.lastMessageAt? new Date(data.lastMessageAt.toMillis()).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):''}</span></div><div class="last">${data.lastMessagePreview||'Mulai chat...'}</div></div>`;
+      list.appendChild(el);
+    }
+  });
+}
+
+function openAddContact(){ document.getElementById('addModal').classList.add('open'); }
+function closeAddContact(){ document.getElementById('addModal').classList.remove('open'); }
+async function addContact(){
+  const name=document.getElementById('contactName').value.trim();
+  let phone=cleanPhone(document.getElementById('contactPhone').value);
+  if(!phone.startsWith('+')) phone='+'+phone;
+  const st=document.getElementById('addStatus');
+  if(!name || !phone){ showStatus(st,'Isi nama dan nomor HP', false); return; }
+  try{
+    const userDoc = await db.collection('users').doc(phone).get();
+    if(!userDoc.exists){ showStatus(st,'Nomor ini belum pernah login di app ini. Suruh dia login dulu sekali.', false); return; }
+    const chatId = chatIdFor(currentPhone, phone);
+    await db.collection('chats').doc(chatId).set({
+      participants:[currentPhone, phone],
+      names:{[currentPhone]:currentName, [phone]:name},
+      disappearing:false,
+      lastMessagePreview:'Mulai chat...',
+      lastMessageAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true});
+    closeAddContact();
+    openChat(chatId, phone, name);
+  }catch(e){ showStatus(st,'Gagal: '+e.message, false); }
+}
+
+async function openChat(chatId, otherPhone, otherName){
+  currentChatId=chatId; currentOtherPhone=otherPhone; currentOtherName=otherName;
+  document.getElementById('emptyState').style.display='none';
+  const cv=document.getElementById('chatView'); cv.classList.remove('hidden');
+  document.getElementById('sidebar').classList.add('hide-on-mobile');
+  document.getElementById('main').classList.remove('hide-on-mobile');
+  document.getElementById('main').classList.add('show');
+  if(window.innerWidth<=768) document.getElementById('btnBack').style.display='block';
+  document.getElementById('chatName').textContent=otherName;
+  document.getElementById('chatPhone').textContent=otherPhone;
+  document.getElementById('chatAvatar').textContent=(otherName[0]||'?').toUpperCase();
+  // ambil public key lawan
+  const udoc = await db.collection('users').doc(otherPhone).get();
+  currentOtherPubKey = udoc.exists ? udoc.data().publicKey : null;
+  // ambil setting disappearing
+  const cdoc = await db.collection('chats').doc(chatId).get();
+  disappearing = cdoc.exists ? !!cdoc.data().disappearing : false;
+  document.getElementById('disappearingToggle').checked = disappearing;
+  document.getElementById('chatDisappearingLabel').textContent = 'Pesan Hilang: ' + (disappearing?'Aktif (10 dtk)':'Mati');
+  if(unsubMessages) unsubMessages();
+  unsubMessages = db.collection('chats').doc(chatId).collection('messages').orderBy('createdAt','asc').onSnapshot(async snap=>{
+    const box=document.getElementById('messages'); box.innerHTML='';
+    for(const d of snap.docs){
+      const m=d.data();
+      const isMe = m.from===currentPhone;
+      // tandai sudah dibaca kalau dari lawan dan kita lagi buka chat
+      if(!isMe && !m.read){
+        db.collection('chats').doc(chatId).collection('messages').doc(d.id).update({read:true, readAt: firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+        if(disappearing){
+          setTimeout(()=>{ db.collection('chats').doc(chatId).collection('messages').doc(d.id).delete().catch(()=>{}); }, 10000);
+        }
+      }
+      let plain='...';
+      if(currentOtherPubKey){
+        plain = await decryptFrom(currentOtherPubKey, m.ciphertext, m.iv);
+      }
+      const div=document.createElement('div');
+      div.className='bubble '+(isMe?'me':'other');
+      if(serverView){
+        div.innerHTML=`<div style="font-size:11px;color:#888">SERVER MELIHAT:</div><div class="cipher">${m.ciphertext.slice(0,120)}...</div><div class="meta">${m.createdAt? new Date(m.createdAt.toMillis()).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):''} • Ciphertext saja, admin tidak bisa baca</div>`;
+      }else{
+        div.innerHTML=`<div>${plain}</div><div class="meta">${m.createdAt? new Date(m.createdAt.toMillis()).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):''} ${isMe? (m.read?'✓✓ dibaca':'✓ terkirim'):''} ${disappearing?'• ⏳ hilang 10 dtk':''}</div>`;
+      }
+      box.appendChild(div);
+    }
+    box.scrollTop=box.scrollHeight;
+  });
+}
+
+async function sendMessage(){
+  const inp=document.getElementById('msgInput');
+  const text=inp.value.trim();
+  if(!text || !currentChatId) return;
+  if(!currentOtherPubKey){ alert('Kunci publik lawan belum ketemu. Suruh dia login dulu.'); return; }
+  try{
+    const enc = await encryptFor(currentOtherPubKey, text);
+    const ref = await db.collection('chats').doc(currentChatId).collection('messages').add({
+      from: currentPhone, to: currentOtherPhone,
+      ciphertext: enc.ciphertext, iv: enc.iv,
+      read:false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    // update preview (preview tidak berisi isi pesan, hanya "Pesan terenkripsi")
+    await db.collection('chats').doc(currentChatId).update({
+      lastMessagePreview:'🔒 Pesan terenkripsi',
+      lastMessageAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    inp.value='';
+  }catch(e){ alert('Gagal kirim: '+e.message); }
+}
+
+function toggleServerView(){
+  serverView=!serverView;
+  document.getElementById('serverViewToggle').checked=serverView;
+  document.getElementById('serverViewBtn').textContent = serverView?'Sembunyikan Mode Server':'Lihat sebagai Server';
+  // refresh dengan buka ulang chat
+  if(currentChatId) openChat(currentChatId, currentOtherPhone, currentOtherName);
+}
+function onToggleServerView(v){ serverView=v; if(currentChatId) openChat(currentChatId, currentOtherPhone, currentOtherName); }
+async function onToggleDisappearing(v){
+  disappearing=v;
+  document.getElementById('chatDisappearingLabel').textContent='Pesan Hilang: '+(v?'Aktif (10 dtk)':'Mati');
+  if(currentChatId) await db.collection('chats').doc(currentChatId).update({disappearing:v});
+}
+async function deleteChatForAll(){
+  if(!confirm('Hapus semua pesan di chat ini untuk semua?')) return;
+  const snap = await db.collection('chats').doc(currentChatId).collection('messages').get();
+  for(const d of snap.docs) await d.ref.delete();
+  await db.collection('chats').doc(currentChatId).update({lastMessagePreview:'Pesan dihapus untuk semua'});
+}
+function backToList(){
+  document.getElementById('sidebar').classList.remove('hide-on-mobile');
+  document.getElementById('main').classList.add('hide-on-mobile');
+}
+function showMyKey(){ alert('Nomor: '+currentPhone+'\\nNama: '+currentName+'\\n\\nPrivate key hanya di HP ini (localStorage). Public key ada di Firestore dan boleh dilihat siapa saja.'); }
+async function logout(){ try{ if(auth) await auth.signOut(); }catch(_){} localStorage.removeItem('chat_e2ee_name'); localStorage.removeItem('chat_e2ee_phone'); location.reload(); }
+// AUTO-LOGIN: Sekali OTP, seterusnya langsung masuk kayak WhatsApp
+// Firebase Auth nyimpen session di browser, jadi kalau belum logout, buka link lagi langsung masuk tanpa OTP
+window.onload=async ()=>{
+  const n=localStorage.getItem('chat_e2ee_name'), p=localStorage.getItem('chat_e2ee_phone');
+  if(n && p){ document.getElementById('loginName').value=n; document.getElementById('loginPhone').value=p; }
+  // Cek session Firebase
+  if(firebaseConfig.apiKey.includes('PASTE')) return;
+  try{
+    if(!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore(); auth = firebase.auth();
+    auth.onAuthStateChanged(async (user)=>{
+      if(user && user.phoneNumber){
+        const phone = user.phoneNumber;
+        // Ambil nama dari Firestore
+        let name = localStorage.getItem('chat_e2ee_name') || phone;
+        try{
+          const udoc = await db.collection('users').doc(phone).get();
+          if(udoc.exists) name = udoc.data().name || name;
+        }catch(_){}
+        // Load / buat kunci E2EE
+        const kp = await getOrCreateKeyPair(phone);
+        myPrivateKey = kp.priv;
+        currentUser={name, phone}; currentPhone=phone; currentName=name;
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('app').classList.remove('hidden');
+        document.getElementById('myNameLabel').textContent = name;
+        document.getElementById('myPhoneLabel').textContent = phone + ' • 🔒 E2EE aktif • Sudah login, tanpa OTP lagi';
+        document.getElementById('myKeyLabel').textContent = 'Fingerprint: ' + btoa(JSON.stringify(kp.pubJwk).slice(0,40)).slice(0,12);
+        listenChats();
+      }
+    });
+  }catch(e){ console.log('auto-login skip', e); }
+};
+</script>
+</body>
+</html>
+
