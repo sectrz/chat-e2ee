@@ -101,7 +101,7 @@ body{background:#ece5dd;height:100vh;overflow:hidden}
 <div id="loginScreen" class="login-wrap">
   <div class="login-card">
     <h1>🔒 Chat E2EE</h1>
-    <p>Model WhatsApp. Login pake nomor HP. Pesan terenkripsi end-to-end. Server cuma liat ciphertext, admin ga bisa baca. Default pesan awet di HP, cuma kehapus dari server.</p>
+    <p>Model WhatsApp. Login pake nomor HP. <b style='color:#128C7E'>[v5 - Test Mode]</b> Pesan terenkripsi end-to-end. Server cuma liat ciphertext, admin ga bisa baca. Default pesan awet di HP, cuma kehapus dari server.</p>
     <div id="stepPhone">
       <label>Nama Kamu</label>
       <input id="loginName" placeholder="Contoh: Andika">
@@ -294,6 +294,16 @@ document.getElementById('btnSendOtp').onclick = async ()=>{
   const st = document.getElementById('loginStatus');
   if(!name || !phone || phone.length < 9){ showStatus(st,'Isi nama dan nomor HP +62 yang bener bre', false); return; }
   if(!phone.startsWith('+')) phone = '+'+phone;
+  // BYPASS TOTAL: 2 nomor lu langsung masuk Mode Testing, ga usah lewat Firebase SMS, ga kena blokir region lagi
+  if(phone === '+6287749212120' || phone === '+6285833499845'){
+    isTestMode = true;
+    document.getElementById('stepPhone').classList.add('hidden');
+    document.getElementById('stepOtp').classList.remove('hidden');
+    const kode = phone === '+6287749212120' ? '030798' : '250599';
+    showStatus(document.getElementById('otpStatus'),'Mode Testing aktif buat '+phone+'. Isi kode '+kode+' buat masuk. (Ga pake SMS, gratis)', true);
+    showStatus(st,'Mode Testing aktif', true);
+    return;
+  }
   if(firebaseConfig.apiKey.includes('PASTE')){
     showStatus(st,'Firebase belum dipasang! Ganti firebaseConfig di file ini dulu.', false);
     return;
@@ -349,6 +359,13 @@ document.getElementById('btnVerifyOtp').onclick = async ()=>{
   }catch(e){ showStatus(st,'Kode salah / kadaluarsa: '+e.message, false); }
 };
 document.getElementById('btnResendOtp').onclick = async ()=>{
+  let phone0 = cleanPhone(document.getElementById('loginPhone').value);
+  if(!phone0.startsWith('+')) phone0 = '+'+phone0;
+  if(phone0 === '+6287749212120' || phone0 === '+6285833499845'){
+    const kode = phone0 === '+6287749212120' ? '030798' : '250599';
+    showStatus(document.getElementById('otpStatus'),'Mode Testing - kodenya '+kode, true);
+    return;
+  }
   try{
     let phone = cleanPhone(document.getElementById('loginPhone').value);
     if(!phone.startsWith('+')) phone = '+'+phone;
